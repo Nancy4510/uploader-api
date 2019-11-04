@@ -1,10 +1,17 @@
 // Express docs: http://expressjs.com/en/api.html
 const express = require('express')
+// Require Multer: https://www.npmjs.com/package/multer#readme
+const multer = require('multer')
+const storage = multer.memoryStorage()
+const multerUpload = multer({ storage: storage })
 // Passport docs: http://www.passportjs.org/docs/
 const passport = require('passport')
 
 // pull in Mongoose model for uploads
 const Upload = require('../models/upload')
+
+// Require file upload api
+const uploadApi = require('../../lib/uploadApi')
 
 // this is a collection of methods that help us detect situations when we need
 // to throw a custom error
@@ -57,11 +64,20 @@ router.get('/uploads/:id', requireToken, (req, res, next) => {
 
 // CREATE
 // POST /uploads
-router.post('/uploads', requireToken, (req, res, next) => {
-  // set owner of new upload to be current user
-  req.body.upload.owner = req.user.id
+router.post('/uploads', multerUpload.single('file'), requireToken, (req, res, next) => {
+  console.log(req.file)
 
-  Upload.create(req.body.upload)
+  // set owner of new upload to be current user
+  // req.body.upload.owner = req.user.id
+  uploadApi(req.file)
+    .then(awsResponse => {
+      console.log(awsResponse)
+      return Upload.create({
+        fileName: awsResponse.key,
+        fileType: req.file.mimetype,
+        owner: req.user.id
+      })
+    })
     // respond to succesful `create` with status 201 and JSON of new "upload"
     .then(upload => {
       res.status(201).json({ upload: upload.toObject() })
